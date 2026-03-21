@@ -1,7 +1,6 @@
 import datetime
 import os
 import re
-import textwrap
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -39,26 +38,26 @@ def inject_styles() -> None:
         """
         <style>
         :root {
-            --bg-main: #f4f5ef;
-            --bg-soft: rgba(255, 255, 255, 0.78);
-            --ink-strong: #1f291f;
-            --ink-soft: #5e6a5f;
-            --line-soft: rgba(49, 64, 50, 0.10);
-            --green-600: #14754e;
-            --green-100: rgba(20, 117, 78, 0.14);
-            --amber-600: #996515;
-            --amber-100: rgba(219, 171, 74, 0.18);
-            --red-600: #b34c3f;
-            --red-100: rgba(198, 88, 72, 0.18);
-            --hero-a: #1d3022;
-            --hero-b: #3c563d;
-            --hero-c: #80956d;
+            --bg-main: #0c0f14;
+            --bg-soft: rgba(21, 25, 31, 0.92);
+            --ink-strong: #f3efe4;
+            --ink-soft: #b8a98b;
+            --line-soft: rgba(255, 153, 0, 0.14);
+            --green-600: #38b26d;
+            --green-100: rgba(56, 178, 109, 0.14);
+            --amber-600: #ff9f1a;
+            --amber-100: rgba(255, 159, 26, 0.16);
+            --red-600: #ff6b57;
+            --red-100: rgba(255, 107, 87, 0.16);
+            --hero-a: #11151d;
+            --hero-b: #171d27;
+            --hero-c: #202735;
         }
         .stApp {
             background:
-                radial-gradient(circle at 12% 8%, rgba(74, 127, 88, 0.18), transparent 24%),
-                radial-gradient(circle at 88% 12%, rgba(227, 191, 111, 0.15), transparent 20%),
-                linear-gradient(180deg, #fbfbf7 0%, var(--bg-main) 100%);
+                radial-gradient(circle at 12% 8%, rgba(255, 159, 26, 0.12), transparent 24%),
+                radial-gradient(circle at 88% 12%, rgba(255, 107, 87, 0.08), transparent 20%),
+                linear-gradient(180deg, #0a0d12 0%, var(--bg-main) 100%);
             color: var(--ink-strong);
             font-family: "Avenir Next", "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", sans-serif;
         }
@@ -75,23 +74,25 @@ def inject_styles() -> None:
         }
         .hero {
             background:
-                radial-gradient(circle at 84% 18%, rgba(235, 216, 134, 0.17), transparent 22%),
+                radial-gradient(circle at 84% 18%, rgba(255, 179, 71, 0.14), transparent 22%),
                 linear-gradient(135deg, var(--hero-a) 0%, var(--hero-b) 52%, var(--hero-c) 100%);
             border-radius: 24px;
             padding: 26px 28px;
-            color: #f4f7ef;
-            box-shadow: 0 24px 52px rgba(24, 34, 24, 0.16);
+            color: #f7f1e6;
+            box-shadow: 0 24px 52px rgba(0, 0, 0, 0.34);
             min-height: 244px;
+            border: 1px solid rgba(255, 159, 26, 0.14);
         }
         .hero-title {
             font-size: 2.1rem;
             font-weight: 700;
             letter-spacing: 0.02em;
             line-height: 1.08;
+            color: #ffd089;
         }
         .hero-subtitle {
             font-size: 0.98rem;
-            color: rgba(244, 247, 239, 0.78);
+            color: rgba(243, 239, 228, 0.74);
             margin-top: 0.45rem;
             max-width: 42rem;
         }
@@ -102,11 +103,12 @@ def inject_styles() -> None:
             margin-top: 18px;
         }
         .hero-band-chip {
-            background: rgba(255, 255, 255, 0.09);
-            border: 1px solid rgba(255, 255, 255, 0.10);
+            background: rgba(255, 159, 26, 0.10);
+            border: 1px solid rgba(255, 159, 26, 0.18);
             border-radius: 999px;
             padding: 7px 11px;
             font-size: 0.82rem;
+            color: #f4d7a1;
         }
         .hero-meta {
             display: flex;
@@ -135,12 +137,12 @@ def inject_styles() -> None:
             gap: 12px;
         }
         .summary-chip {
-            background: rgba(255, 255, 255, 0.88);
-            border: 1px solid rgba(39, 54, 39, 0.08);
+            background: rgba(20, 24, 30, 0.95);
+            border: 1px solid rgba(255, 159, 26, 0.10);
             border-radius: 16px;
             padding: 14px 14px 13px;
             min-height: 96px;
-            box-shadow: 0 14px 36px rgba(32, 45, 32, 0.05);
+            box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
         }
         .summary-label {
             font-size: 0.73rem;
@@ -165,7 +167,7 @@ def inject_styles() -> None:
             border: 1px solid var(--line-soft);
             border-radius: 20px;
             padding: 18px 18px 16px;
-            box-shadow: 0 16px 36px rgba(29, 36, 29, 0.06);
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.24);
         }
         .summary-card-title {
             color: var(--ink-soft);
@@ -193,11 +195,11 @@ def inject_styles() -> None:
             margin-bottom: 14px;
         }
         .pulse-card {
-            background: rgba(255, 255, 255, 0.76);
+            background: rgba(20, 24, 30, 0.94);
             border: 1px solid var(--line-soft);
             border-radius: 16px;
             padding: 14px 16px;
-            box-shadow: 0 12px 26px rgba(29, 36, 29, 0.045);
+            box-shadow: 0 12px 26px rgba(0, 0, 0, 0.18);
         }
         .pulse-title {
             color: var(--ink-soft);
@@ -219,11 +221,11 @@ def inject_styles() -> None:
         }
         .insight-card {
             background:
-                linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(248, 249, 243, 0.92));
+                linear-gradient(180deg, rgba(19, 23, 29, 0.92), rgba(16, 20, 26, 0.96));
             border: 1px solid var(--line-soft);
             border-radius: 18px;
             padding: 18px 20px;
-            box-shadow: 0 16px 34px rgba(29, 36, 29, 0.055);
+            box-shadow: 0 16px 34px rgba(0, 0, 0, 0.22);
             margin-bottom: 14px;
         }
         .insight-title {
@@ -246,8 +248,8 @@ def inject_styles() -> None:
             margin-top: 14px;
         }
         .signal-item {
-            background: rgba(245, 247, 241, 0.94);
-            border: 1px solid rgba(47, 66, 49, 0.08);
+            background: rgba(11, 14, 19, 0.78);
+            border: 1px solid rgba(255, 159, 26, 0.10);
             border-radius: 14px;
             padding: 12px 13px;
         }
@@ -262,12 +264,12 @@ def inject_styles() -> None:
             color: var(--ink-strong);
         }
         .section-card {
-            background: rgba(255, 255, 255, 0.74);
+            background: rgba(19, 23, 29, 0.92);
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(42, 56, 44, 0.07);
+            border: 1px solid rgba(255, 159, 26, 0.10);
             border-radius: 18px;
             padding: 18px 20px 12px;
-            box-shadow: 0 12px 30px rgba(29, 36, 29, 0.06);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
             margin-bottom: 16px;
         }
         .section-title {
@@ -288,28 +290,28 @@ def inject_styles() -> None:
             text-transform: uppercase;
             letter-spacing: 0.06em;
             padding: 10px 10px;
-            border-bottom: 1px solid rgba(60, 77, 60, 0.14);
+            border-bottom: 1px solid rgba(255, 159, 26, 0.12);
         }
         .macro-table td {
             padding: 11px 10px;
-            border-bottom: 1px solid rgba(60, 77, 60, 0.08);
+            border-bottom: 1px solid rgba(255, 159, 26, 0.08);
             vertical-align: middle;
         }
         .metric-label {
             font-weight: 600;
-            color: #233224;
+            color: #f0e6d1;
         }
         .metric-value {
             font-variant-numeric: tabular-nums;
-            color: #1b241d;
+            color: #f7f1e6;
         }
         .metric-change {
             font-variant-numeric: tabular-nums;
             font-weight: 600;
         }
-        .tone-up { color: #12834d; }
-        .tone-down { color: #c1493f; }
-        .tone-flat { color: #64715e; }
+        .tone-up { color: #5fd18c; }
+        .tone-down { color: #ff7c69; }
+        .tone-flat { color: #8d867a; }
         .status-pill {
             display: inline-block;
             border-radius: 999px;
@@ -319,22 +321,22 @@ def inject_styles() -> None:
             margin-right: 8px;
         }
         .pill-ok {
-            color: #146c43;
-            background: rgba(24, 131, 77, 0.12);
+            color: #5fd18c;
+            background: rgba(56, 178, 109, 0.12);
         }
         .pill-watch {
-            color: #8b5a11;
-            background: rgba(236, 173, 59, 0.18);
+            color: #ffb347;
+            background: rgba(255, 179, 71, 0.12);
         }
         .pill-alert {
-            color: #8d2c23;
-            background: rgba(204, 81, 68, 0.16);
+            color: #ff7c69;
+            background: rgba(255, 107, 87, 0.12);
         }
         .status-text {
-            color: #59665a;
+            color: #c7bda9;
         }
         .footer-note {
-            color: #667568;
+            color: #968c7f;
             font-size: 0.86rem;
             margin-top: 8px;
         }
@@ -343,30 +345,30 @@ def inject_styles() -> None:
             margin-bottom: 0.85rem;
         }
         .stTabs [data-baseweb="tab"] {
-            background: rgba(255, 255, 255, 0.74);
-            border: 1px solid rgba(47, 66, 49, 0.08);
+            background: rgba(18, 22, 28, 0.92);
+            border: 1px solid rgba(255, 159, 26, 0.10);
             border-radius: 999px;
             padding: 0.55rem 0.95rem;
-            color: #516052;
+            color: #b8a98b;
             font-weight: 600;
         }
         .stTabs [aria-selected="true"] {
-            background: #213525 !important;
-            color: #f1f6eb !important;
-            border-color: #213525 !important;
+            background: #ff9f1a !important;
+            color: #11151d !important;
+            border-color: #ff9f1a !important;
         }
         div.stButton > button {
             border-radius: 999px;
-            background: #263b29;
-            color: #f4f7ef;
-            border: none;
+            background: #ff9f1a;
+            color: #11151d;
+            border: 1px solid #ffb347;
             font-weight: 700;
             padding: 0.5rem 1rem;
-            box-shadow: 0 12px 24px rgba(28, 44, 30, 0.14);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.26);
         }
         div.stButton > button:hover {
-            background: #314d36;
-            color: #ffffff;
+            background: #ffb347;
+            color: #11151d;
         }
         @media (max-width: 1100px) {
             .hero-shell {
@@ -673,48 +675,20 @@ def make_row(label: str, value, change, unit: str, status: str, tone: str) -> Me
 
 def render_pulse_cards(cards: list[tuple[str, str, str, str]]) -> None:
     card_html = "".join(
-        f"""
-<div class="pulse-card">
-  <div class="pulse-title">{title}</div>
-  <div class="pulse-value">{value}</div>
-  <div class="pulse-sub {tone_class}">{subtext}</div>
-</div>
-"""
+        f'<div class="pulse-card"><div class="pulse-title">{title}</div><div class="pulse-value">{value}</div><div class="pulse-sub {tone_class}">{subtext}</div></div>'
         for title, value, subtext, tone_class in cards
     )
-    st.html(
-        textwrap.dedent(
-            f"""
-            <div class="pulse-grid">
-            {card_html}
-            </div>
-            """
-        ).strip(),
-    )
+    st.markdown(f'<div class="pulse-grid">{card_html}</div>', unsafe_allow_html=True)
 
 
 def render_insight_card(title: str, main_text: str, signals: list[tuple[str, str]]) -> None:
     signal_html = "".join(
-        f"""
-<div class="signal-item">
-  <div class="signal-item-title">{label}</div>
-  <div class="signal-item-value">{value}</div>
-</div>
-"""
+        f'<div class="signal-item"><div class="signal-item-title">{label}</div><div class="signal-item-value">{value}</div></div>'
         for label, value in signals
     )
-    st.html(
-        textwrap.dedent(
-            f"""
-            <div class="insight-card">
-              <div class="insight-title">{title}</div>
-              <div class="insight-main">{main_text}</div>
-              <div class="signal-grid">
-              {signal_html}
-              </div>
-            </div>
-            """
-        ).strip(),
+    st.markdown(
+        f'<div class="insight-card"><div class="insight-title">{title}</div><div class="insight-main">{main_text}</div><div class="signal-grid">{signal_html}</div></div>',
+        unsafe_allow_html=True,
     )
 
 
@@ -723,39 +697,13 @@ def render_table(title: str, rows: list[MetricRow], note: str | None = None) -> 
     for row in rows:
         pill_class = tone_to_pill(row.tone)
         body.append(
-            f"""
-<tr>
-  <td class="metric-label">{row.label}</td>
-  <td class="metric-value">{row.value}</td>
-  <td class="metric-change">{row.change}</td>
-  <td><span class="status-pill {pill_class}">{'正常' if row.tone == 'ok' else '警戒' if row.tone == 'watch' else '预警'}</span><span class="status-text">{row.status}</span></td>
-</tr>
-            """
+            f'<tr><td class="metric-label">{row.label}</td><td class="metric-value">{row.value}</td><td class="metric-change">{row.change}</td><td><span class="status-pill {pill_class}">{"正常" if row.tone == "ok" else "警戒" if row.tone == "watch" else "预警"}</span><span class="status-text">{row.status}</span></td></tr>'
         )
 
     note_html = f'<div class="footer-note">{note}</div>' if note else ""
-    st.html(
-        textwrap.dedent(
-            f"""
-            <div class="section-card">
-              <div class="section-title">{title}</div>
-              <table class="macro-table">
-                <thead>
-                  <tr>
-                    <th>指标</th>
-                    <th>数值</th>
-                    <th>日内</th>
-                    <th>状态评估</th>
-                  </tr>
-                </thead>
-                <tbody>
-                {''.join(body)}
-                </tbody>
-              </table>
-              {note_html}
-            </div>
-            """
-        ).strip(),
+    st.markdown(
+        f'<div class="section-card"><div class="section-title">{title}</div><table class="macro-table"><thead><tr><th>指标</th><th>数值</th><th>日内</th><th>状态评估</th></tr></thead><tbody>{"".join(body)}</tbody></table>{note_html}</div>',
+        unsafe_allow_html=True,
     )
 
 
