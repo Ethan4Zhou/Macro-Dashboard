@@ -1,6 +1,8 @@
 import datetime
 import re
+import textwrap
 from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 import streamlit as st
@@ -10,6 +12,10 @@ from bs4 import BeautifulSoup
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 requests.packages.urllib3.disable_warnings()  # type: ignore[attr-defined]
+
+REQUEST_TIMEOUT_SECONDS = 5
+REQUEST_RETRIES = 2
+MAX_FETCH_WORKERS = 8
 
 st.set_page_config(
     page_title="全球宏观监控面板",
@@ -381,14 +387,14 @@ def inject_styles() -> None:
     )
 
 
-def fetch_with_retry(url: str, parser_func, retries: int = 3):
+def fetch_with_retry(url: str, parser_func, retries: int = REQUEST_RETRIES):
     session = requests.Session()
     for attempt in range(retries):
         try:
             response = session.get(
                 url,
                 headers={"User-Agent": "Mozilla/5.0"},
-                timeout=10,
+                timeout=REQUEST_TIMEOUT_SECONDS,
                 verify=False,
             )
             parsed = parser_func(response.text)
@@ -438,6 +444,44 @@ def fetch_cnbc(symbol: str):
 
 def fetch_fred(series_id: str):
     return fetch_with_retry(f"https://fred.stlouisfed.org/series/{series_id}", parse_fred)
+
+
+def fetch_all_sources():
+    quote_specs = {
+        "btc": ("cnbc", "BTC.CB="),
+        "gold": ("cnbc", "@GC.1"),
+        "silver": ("cnbc", "@SI.1"),
+        "copper": ("cnbc", "@HG.1"),
+        "oil": ("cnbc", "@CL.1"),
+        "us10y": ("cnbc", "US10Y"),
+        "us2y": ("cnbc", "US2Y"),
+        "jp10y": ("cnbc", "JP10Y"),
+        "dxy": ("cnbc", ".DXY"),
+        "usdcnh": ("cnbc", "CNH="),
+        "vix": ("cnbc", ".VIX"),
+        "hy_spread": ("fred", "BAMLH0A0HYM2"),
+        "real_yield_10y": ("fred", "DFII10"),
+        "rrp_liq": ("fred", "RRPONTSYD"),
+    }
+
+    results = {}
+    with ThreadPoolExecutor(max_workers=MAX_FETCH_WORKERS) as executor:
+        future_map = {}
+        for key, (source, symbol) in quote_specs.items():
+            if source == "cnbc":
+                future = executor.submit(fetch_cnbc, symbol)
+            else:
+                future = executor.submit(fetch_fred, symbol)
+            future_map[future] = key
+
+        for future in as_completed(future_map):
+            key = future_map[future]
+            try:
+                results[key] = future.result()
+            except Exception:
+                results[key] = (None, None)
+
+    return results
 
 
 def format_value(value, unit: str = "") -> str:
@@ -516,20 +560,22 @@ def analyze_4th_turning(vix, gold):
 
 @st.cache_data(ttl=900, show_spinner=False)
 def load_dashboard_data():
-    btc, btc_chg = fetch_cnbc("BTC.CB=")
-    gold, gold_chg = fetch_cnbc("@GC.1")
-    silver, silver_chg = fetch_cnbc("@SI.1")
-    copper, copper_chg = fetch_cnbc("@HG.1")
-    oil, oil_chg = fetch_cnbc("@CL.1")
-    us10y, us10y_chg = fetch_cnbc("US10Y")
-    us2y, us2y_chg = fetch_cnbc("US2Y")
-    jp10y, jp10y_chg = fetch_cnbc("JP10Y")
-    dxy, dxy_chg = fetch_cnbc(".DXY")
-    usdcnh, usdcnh_chg = fetch_cnbc("CNH=")
-    vix, vix_chg = fetch_cnbc(".VIX")
-    hy_spread, _ = fetch_fred("BAMLH0A0HYM2")
-    real_yield_10y, _ = fetch_fred("DFII10")
-    rrp_liq, _ = fetch_fred("RRPONTSYD")
+    source_data = fetch_all_sources()
+
+    btc, btc_chg = source_data["btc"]
+    gold, gold_chg = source_data["gold"]
+    silver, silver_chg = source_data["silver"]
+    copper, copper_chg = source_data["copper"]
+    oil, oil_chg = source_data["oil"]
+    us10y, us10y_chg = source_data["us10y"]
+    us2y, us2y_chg = source_data["us2y"]
+    jp10y, jp10y_chg = source_data["jp10y"]
+    dxy, dxy_chg = source_data["dxy"]
+    usdcnh, usdcnh_chg = source_data["usdcnh"]
+    vix, vix_chg = source_data["vix"]
+    hy_spread, _ = source_data["hy_spread"]
+    real_yield_10y, _ = source_data["real_yield_10y"]
+    rrp_liq, _ = source_data["rrp_liq"]
 
     cg_ratio = (copper * 100) / gold if copper and gold else None
     curve_10y2y = (us10y - us2y) * 100 if us10y and us2y else None
@@ -560,45 +606,49 @@ def make_row(label: str, value, change, unit: str, status: str, tone: str) -> Me
 
 
 def render_pulse_cards(cards: list[tuple[str, str, str, str]]) -> None:
-    st.markdown(
+    card_html = "".join(
         f"""
-        <div class="pulse-grid">
-          {''.join(
-              f'''
-              <div class="pulse-card">
-                <div class="pulse-title">{title}</div>
-                <div class="pulse-value">{value}</div>
-                <div class="pulse-sub {tone_class}">{subtext}</div>
-              </div>
-              '''
-              for title, value, subtext, tone_class in cards
-          )}
-        </div>
-        """,
-        unsafe_allow_html=True,
+<div class="pulse-card">
+  <div class="pulse-title">{title}</div>
+  <div class="pulse-value">{value}</div>
+  <div class="pulse-sub {tone_class}">{subtext}</div>
+</div>
+"""
+        for title, value, subtext, tone_class in cards
+    )
+    st.html(
+        textwrap.dedent(
+            f"""
+            <div class="pulse-grid">
+            {card_html}
+            </div>
+            """
+        ).strip(),
     )
 
 
 def render_insight_card(title: str, main_text: str, signals: list[tuple[str, str]]) -> None:
-    st.markdown(
+    signal_html = "".join(
         f"""
-        <div class="insight-card">
-          <div class="insight-title">{title}</div>
-          <div class="insight-main">{main_text}</div>
-          <div class="signal-grid">
-            {''.join(
-                f'''
-                <div class="signal-item">
-                  <div class="signal-item-title">{label}</div>
-                  <div class="signal-item-value">{value}</div>
-                </div>
-                '''
-                for label, value in signals
-            )}
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+<div class="signal-item">
+  <div class="signal-item-title">{label}</div>
+  <div class="signal-item-value">{value}</div>
+</div>
+"""
+        for label, value in signals
+    )
+    st.html(
+        textwrap.dedent(
+            f"""
+            <div class="insight-card">
+              <div class="insight-title">{title}</div>
+              <div class="insight-main">{main_text}</div>
+              <div class="signal-grid">
+              {signal_html}
+              </div>
+            </div>
+            """
+        ).strip(),
     )
 
 
@@ -608,37 +658,38 @@ def render_table(title: str, rows: list[MetricRow], note: str | None = None) -> 
         pill_class = tone_to_pill(row.tone)
         body.append(
             f"""
-            <tr>
-              <td class="metric-label">{row.label}</td>
-              <td class="metric-value">{row.value}</td>
-              <td class="metric-change">{row.change}</td>
-              <td><span class="status-pill {pill_class}">{'正常' if row.tone == 'ok' else '警戒' if row.tone == 'watch' else '预警'}</span><span class="status-text">{row.status}</span></td>
-            </tr>
+<tr>
+  <td class="metric-label">{row.label}</td>
+  <td class="metric-value">{row.value}</td>
+  <td class="metric-change">{row.change}</td>
+  <td><span class="status-pill {pill_class}">{'正常' if row.tone == 'ok' else '警戒' if row.tone == 'watch' else '预警'}</span><span class="status-text">{row.status}</span></td>
+</tr>
             """
         )
 
     note_html = f'<div class="footer-note">{note}</div>' if note else ""
-    st.markdown(
-        f"""
-        <div class="section-card">
-          <div class="section-title">{title}</div>
-          <table class="macro-table">
-            <thead>
-              <tr>
-                <th>指标</th>
-                <th>数值</th>
-                <th>日内</th>
-                <th>状态评估</th>
-              </tr>
-            </thead>
-            <tbody>
-              {''.join(body)}
-            </tbody>
-          </table>
-          {note_html}
-        </div>
-        """,
-        unsafe_allow_html=True,
+    st.html(
+        textwrap.dedent(
+            f"""
+            <div class="section-card">
+              <div class="section-title">{title}</div>
+              <table class="macro-table">
+                <thead>
+                  <tr>
+                    <th>指标</th>
+                    <th>数值</th>
+                    <th>日内</th>
+                    <th>状态评估</th>
+                  </tr>
+                </thead>
+                <tbody>
+                {''.join(body)}
+                </tbody>
+              </table>
+              {note_html}
+            </div>
+            """
+        ).strip(),
     )
 
 
