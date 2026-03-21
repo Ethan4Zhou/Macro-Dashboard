@@ -1,4 +1,5 @@
 import datetime
+import os
 import re
 import textwrap
 from dataclasses import dataclass
@@ -438,11 +439,76 @@ def parse_fred(text: str):
     return None, None
 
 
+def parse_fred_api(payload: dict):
+    observations = payload.get("observations", [])
+    for observation in observations:
+        value = observation.get("value")
+        if value in (None, "", "."):
+            continue
+        try:
+            return float(str(value).replace(",", "")), None
+        except ValueError:
+            continue
+    return None, None
+
+
 def fetch_cnbc(symbol: str):
     return fetch_with_retry(f"https://www.cnbc.com/quotes/{symbol}", parse_cnbc)
 
 
+def get_fred_api_key() -> str | None:
+    try:
+        secret_key = st.secrets.get("FRED_API_KEY")
+        if secret_key:
+            return str(secret_key).strip()
+    except Exception:
+        pass
+
+    env_key = os.getenv("FRED_API_KEY", "").strip()
+    return env_key or None
+
+
+def fetch_fred_api(series_id: str, api_key: str, retries: int = REQUEST_RETRIES):
+    session = requests.Session()
+    url = "https://api.stlouisfed.org/fred/series/observations"
+    params = {
+        "series_id": series_id,
+        "api_key": api_key,
+        "file_type": "json",
+        "sort_order": "desc",
+        "limit": 10,
+    }
+
+    for attempt in range(retries):
+        try:
+            response = session.get(
+                url,
+                params=params,
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=REQUEST_TIMEOUT_SECONDS,
+                verify=False,
+            )
+            parsed = parse_fred_api(response.json())
+            if parsed[0] is not None:
+                return parsed
+        except Exception:
+            pass
+
+        if attempt < retries - 1:
+            import time
+
+            time.sleep(0.5)
+
+    return None, None
+
+
 def fetch_fred(series_id: str):
+    api_key = get_fred_api_key()
+    if api_key:
+        api_result = fetch_fred_api(series_id, api_key)
+        if api_result[0] is not None:
+            return api_result
+
     return fetch_with_retry(f"https://fred.stlouisfed.org/series/{series_id}", parse_fred)
 
 
