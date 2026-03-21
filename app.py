@@ -3,6 +3,7 @@ import os
 import re
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from zoneinfo import ZoneInfo
 
 import requests
 import streamlit as st
@@ -16,6 +17,7 @@ requests.packages.urllib3.disable_warnings()  # type: ignore[attr-defined]
 REQUEST_TIMEOUT_SECONDS = 5
 REQUEST_RETRIES = 2
 MAX_FETCH_WORKERS = 8
+BEIJING_TZ = ZoneInfo("Asia/Shanghai")
 
 st.set_page_config(
     page_title="全球宏观监控面板",
@@ -732,7 +734,7 @@ def render_dashboard() -> None:
     with st.spinner("正在连接全球金融市场..."):
         data = load_dashboard_data()
 
-    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now_str = datetime.datetime.now(BEIJING_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
     kw_text, kw_tone = analyze_kwave(data["gold"][0], data["cg_ratio"])
     kz_text, kz_tone = analyze_kuznets(data["curve_10y2y"], data["hy_spread"])
@@ -755,7 +757,7 @@ def render_dashboard() -> None:
         ("美债10Y", format_value(data["us10y"][0], "%"), format_change(data["us10y"][1])[0], format_change(data["us10y"][1])[1]),
         ("美元指数", format_value(data["dxy"][0]), format_change(data["dxy"][1])[0], format_change(data["dxy"][1])[1]),
         ("VIX", format_value(data["vix"][0]), format_change(data["vix"][1])[0], format_change(data["vix"][1])[1]),
-        ("更新时间", now_str, "15 分钟缓存", "tone-flat"),
+        ("更新时间", now_str, "北京时间 / 15 分钟缓存", "tone-flat"),
     ]
 
     st.markdown(
@@ -775,7 +777,7 @@ def render_dashboard() -> None:
                 <div class="hero-meta-value">{main_bias}</div>
               </div>
               <div>
-                <div class="hero-meta-label">数据刷新</div>
+                <div class="hero-meta-label">数据刷新（北京时间）</div>
                 <div class="hero-meta-value">{now_str}</div>
               </div>
             </div>
