@@ -63,8 +63,23 @@ def inject_styles() -> None:
         }
         .block-container {
             max-width: 1320px;
-            padding-top: 1.3rem;
+            padding-top: 0.85rem;
             padding-bottom: 2rem;
+        }
+        header[data-testid="stHeader"] {
+            display: none;
+        }
+        div[data-testid="stToolbar"] {
+            display: none;
+        }
+        div[data-testid="stDecoration"] {
+            display: none;
+        }
+        div[data-testid="stStatusWidget"] {
+            display: none;
+        }
+        #MainMenu {
+            display: none;
         }
         .hero-shell {
             display: grid;
@@ -343,6 +358,10 @@ def inject_styles() -> None:
         .stTabs [data-baseweb="tab-list"] {
             gap: 0.5rem;
             margin-bottom: 0.85rem;
+        }
+        .stTabs [data-baseweb="tab-highlight"] {
+            background: transparent !important;
+            height: 0 !important;
         }
         .stTabs [data-baseweb="tab"] {
             background: rgba(18, 22, 28, 0.92);
