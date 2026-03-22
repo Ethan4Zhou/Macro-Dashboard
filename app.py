@@ -1,8 +1,10 @@
 import datetime
 import os
 import re
+import tomllib
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import requests
@@ -18,6 +20,19 @@ REQUEST_TIMEOUT_SECONDS = 5
 REQUEST_RETRIES = 2
 MAX_FETCH_WORKERS = 8
 BEIJING_TZ = ZoneInfo("Asia/Shanghai")
+APP_DIR = Path(__file__).resolve().parent
+
+YAHOO_FALLBACK_TICKERS = {
+    "BTC.CB=": "BTC-USD",
+    "@GC.1": "GC=F",
+    "@SI.1": "SI=F",
+    "@HG.1": "HG=F",
+    "@CL.1": "CL=F",
+    "US10Y": "^TNX",
+    ".DXY": "DX-Y.NYB",
+    "CNH=": "CNH=X",
+    ".VIX": "^VIX",
+}
 
 st.set_page_config(
     page_title="全球宏观监控面板",
@@ -448,9 +463,27 @@ def parse_cnbc(text: str):
 
     if price is None:
         soup = BeautifulSoup(text, "html.parser")
-        tag = soup.find("span", class_="QuoteStrip-lastPrice")
+        tag = soup.find(class_=re.compile(r"QuoteStrip-lastPrice"))
         if tag:
-            price = float(tag.text.strip().replace("%", "").replace(",", ""))
+            tag_text = tag.get_text(" ", strip=True)
+            match_inline_price = re.search(r"(-?\d[\d,]*\.?\d*)", tag_text)
+            if match_inline_price:
+                try:
+                    parsed_price = float(match_inline_price.group(1).replace(",", ""))
+                    if parsed_price != 0:
+                        price = parsed_price
+                except ValueError:
+                    pass
+
+        if pct is None:
+            pct_tag = soup.find(class_=re.compile(r"changePct|change_pct|QuoteStrip-change"))
+            if pct_tag:
+                match_inline_pct = re.search(r"(-?\d[\d,]*\.?\d*)%", pct_tag.get_text(" ", strip=True))
+                if match_inline_pct:
+                    try:
+                        pct = float(match_inline_pct.group(1).replace(",", ""))
+                    except ValueError:
+                        pass
 
     return price, pct
 
@@ -475,8 +508,114 @@ def parse_fred_api(payload: dict):
     return None, None
 
 
+def get_last_two_numbers(values):
+    clean_values = [value for value in values if value is not None]
+    if not clean_values:
+        return None, None
+    if len(clean_values) == 1:
+        return clean_values[-1], None
+    return clean_values[-1], clean_values[-2]
+
+
+def fetch_yahoo_quote(ticker: str, retries: int = REQUEST_RETRIES):
+    session = requests.Session()
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
+    params = {"interval": "1d", "range": "5d"}
+
+    for attempt in range(retries):
+        try:
+            response = session.get(
+                url,
+                params=params,
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=REQUEST_TIMEOUT_SECONDS,
+                verify=False,
+            )
+            payload = response.json()
+            result = payload.get("chart", {}).get("result")
+            if not result:
+                raise ValueError("No result from Yahoo chart API")
+
+            chart = result[0]
+            meta = chart.get("meta", {})
+            closes = chart.get("indicators", {}).get("quote", [{}])[0].get("close", [])
+            latest_close, prev_close_from_series = get_last_two_numbers(closes)
+
+            price = meta.get("regularMarketPrice")
+            if price is None:
+                price = latest_close
+
+            prev_close = (
+                meta.get("regularMarketPreviousClose")
+                or meta.get("previousClose")
+                or meta.get("chartPreviousClose")
+                or prev_close_from_series
+            )
+
+            pct = None
+            if price is not None and prev_close not in (None, 0):
+                pct = ((float(price) - float(prev_close)) / float(prev_close)) * 100
+
+            if price is not None:
+                return float(price), pct
+        except Exception:
+            pass
+
+        if attempt < retries - 1:
+            import time
+
+            time.sleep(0.5)
+
+    return None, None
+
+
+def fetch_tradingeconomics_jp10y(retries: int = REQUEST_RETRIES):
+    session = requests.Session()
+    url = "https://tradingeconomics.com/japan/government-bond-yield"
+
+    for attempt in range(retries):
+        try:
+            response = session.get(
+                url,
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=REQUEST_TIMEOUT_SECONDS,
+                verify=False,
+            )
+            text = response.text
+            for pattern in [
+                r'"Last":([0-9]+(?:\.[0-9]+)?)',
+                r"Japan 10Y Bond Yield held steady at ([0-9]+(?:\.[0-9]+)?)%",
+                r"Japan 10 Year Government Bond Yield held steady at ([0-9]+(?:\.[0-9]+)?)%",
+            ]:
+                match = re.search(pattern, text)
+                if match:
+                    return float(match.group(1)), None
+        except Exception:
+            pass
+
+        if attempt < retries - 1:
+            import time
+
+            time.sleep(0.5)
+
+    return None, None
+
+
 def fetch_cnbc(symbol: str):
-    return fetch_with_retry(f"https://www.cnbc.com/quotes/{symbol}", parse_cnbc)
+    cnbc_result = fetch_with_retry(f"https://www.cnbc.com/quotes/{symbol}", parse_cnbc)
+    if cnbc_result[0] is not None:
+        return cnbc_result
+
+    yahoo_ticker = YAHOO_FALLBACK_TICKERS.get(symbol)
+    if yahoo_ticker:
+        yahoo_result = fetch_yahoo_quote(yahoo_ticker)
+        if yahoo_result[0] is not None:
+            return yahoo_result
+
+    if symbol == "JP10Y":
+        return fetch_tradingeconomics_jp10y()
+
+    return cnbc_result
 
 
 def get_fred_api_key() -> str | None:
@@ -486,6 +625,17 @@ def get_fred_api_key() -> str | None:
             return str(secret_key).strip()
     except Exception:
         pass
+
+    local_secrets_path = APP_DIR / ".streamlit" / "secrets.toml"
+    if local_secrets_path.exists():
+        try:
+            with local_secrets_path.open("rb") as f:
+                local_secrets = tomllib.load(f)
+            local_key = str(local_secrets.get("FRED_API_KEY", "")).strip()
+            if local_key:
+                return local_key
+        except Exception:
+            pass
 
     env_key = os.getenv("FRED_API_KEY", "").strip()
     return env_key or None
